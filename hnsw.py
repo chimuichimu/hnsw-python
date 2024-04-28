@@ -207,10 +207,10 @@ class HNSW:
             self.highest_layer_num = l_max
 
 
-# Example of usage
-hnsw = HNSW(M=5, Mmax=10, efConstruction=200, mL=1.0)
+# インデックスの初期化
+hnsw = HNSW(M=6, M_max=25, ef_construction=25, mL=1 / math.log(6))
 
-# Inserting some data points into the HNSW graph
+# インデックスの作成
 data_points = [
     np.array([0.5, 0.6]),
     np.array([0.1, 0.2]),
@@ -220,11 +220,9 @@ data_points = [
 for point in data_points:
     hnsw.insert(point)
 
-# Querying a point to find its k-nearest neighbors
+# k近傍探索
 query_point = np.array([0.6, 0.7])
-k_neighbors = hnsw.knn_search(query_point, K=3, ef=10)
-
-# Print the query results
+k_neighbors = hnsw.knn_search(query_point, k=3, ef=20)
 print("K-Nearest Neighbors:")
 for neighbor in k_neighbors:
     print(hnsw.nodes[neighbor]["data"])
