@@ -9,30 +9,38 @@ class Node:
 
     def __init__(self, vector: np.ndarray, layer_idx: int):
         """
+        ノードの初期化
+
         Args:
             vector (np.ndarray): ノードのベクトル値
             layer_idx (int): ノードが属するレイヤーのインデックス
         """
         self.vector = vector
         self.layer_idx = layer_idx
-        self.neighborhood: Set[Node] = set()  # エッジが張られているノードの集合
+        self.neighborhood: Set[Node] = set()
 
     def add_neighborhood(self, q):
+        """
+        与えられたノードをノードの近傍に追加する
+
+        Args:
+            q (Node): 追加するノード
+        """
         if self.layer_idx == q.layer_idx:
             self.neighborhood.add(q)
 
 
 class HNSW:
-    """Hierarchical Navigable Small World (HNSW) のグラフ構造を保持するクラス"""
+    """Hierarchical Navigable Small World (HNSW) のグラフ構造を管理するクラス"""
 
-    def __init__(
-        self, m_conn: int, m_conn_max: int, ef_construction: int, ml: float
-    ) -> None:
+    def __init__(self, m_conn: int, m_conn_max: int, ef_construction: int, ml: float):
         """
+        グラフ構造の初期化
+
         Args:
-            m_conn (int): ノードを新しく追加するとき、エッジをいくつ張るか
-            m_conn_max (int): 一つのレイヤーあたりに各ノードが保持できるエッジの最大数
-            ef_construction (int): hoge
+            m_conn (int): 各ノードが新しく追加される際に接続される近傍ノードの数
+            m_conn_max (int): 一つのレイヤーにおけるノードが持つことができるエッジの最大数
+            ef_construction (int): 構築中時に探索する近傍ノードの数
             ml (float): ノードが属するレイヤーを決定する時の正規化パラメータ
         """
         self.nodes: Set[Node] = set()
@@ -45,22 +53,22 @@ class HNSW:
 
     def _calc_similarity(self, a: Node, b: Node) -> float:
         """
-        2点のノードのベクトル間のcos類似度を計算する
+         与えられた二つのノード間のコサイン類似度を計算する
 
         Args:
             a (Node): ノードA
             b (Node): ノードB
 
         Returns:
-            float: ノードAB間のcos類似度
+            float: ノード間のコサイン類似度
         """
         v1 = a.vector
         v2 = b.vector
-        return calc_cos_similarity(v1, v2)
+        return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
 
     def _select_neighbors(self, q: Node, candidates: Set[Node], m: int) -> Set[Node]:
         """
-        与えられた候補の中から、最もクエリと類似するノードの上位 m 個を返す
+        与えられた候補の中から、クエリノードに最も類似した上位m個のノードを選択する
 
         Args:
             q (Node): 探索対象のクエリ
@@ -68,7 +76,7 @@ class HNSW:
             m (int): 類似するノード上位何個を返すか
 
         Returns:
-            Set[Node]: 近傍ノードの集合
+            Set[Node]: 選択された近傍ノードの集合
         """
         return set(
             sorted(candidates, key=lambda x: self._calc_similarity(q, x), reverse=True)[
@@ -84,6 +92,9 @@ class HNSW:
             q (Node): 探索対象のクエリ
             ep (Node): 探索の開始点
             ef (int): 返却する類似ノード数
+
+        Returns:
+            Set[Node]: 探索によって見つかった近傍ノードの集合
         """
         nodes_visited = set([ep])
         candidates = set([ep])
@@ -118,17 +129,20 @@ class HNSW:
 
     def knn_search(self, vector: np.ndarray, k: int, ef: int) -> List[Node]:
         """
-        作成したインデックスを基に K 近傍探索を行う
+        指定されたベクトルに最も類似するノードをk個探索するK近傍探索を行う
 
         Args:
-            vector (np.ndarray): 探索対象のクエリ
-            k (int): 類似する上位 k 番目まで取得するか
-            ef (int) : 探索対象とする候補数
+            vector (np.ndarray): 探索クエリとして使用されるベクトル
+            k (int): 返される類似ノードの数
+            ef (int): 探索過程で考慮する近傍ノードの最大数
+
+        Returns:
+            Set[Node]: クエリベクトルに類似するk個のノード
         """
         q = Node(vector, 0)
         ep = self.entry_point
 
-        for lc in range(self.highest_layer_num, 0, -1):
+        for _ in range(self.highest_layer_num, 0, -1):
             candidates = self._search_layer(q, ep, 1)
             ep = max(candidates, key=lambda x: self._calc_similarity(q, x))
 
@@ -142,44 +156,47 @@ class HNSW:
         Args:
             vector (np.ndarray): 新たに追加するクエリのもとになるベクトル
         """
-        # クエリのノードを最大どのレイヤーまで追加するかを決定
+        # クエリのノードを追加する最も高位のレイヤーを確率的に決定
         l_max = math.floor(-math.log(np.random.uniform()) * self.ml)
 
-        # 初回のノード登録
+        # 1つ目のノード登録
         if self.entry_point is None:
             for lc in range(l_max, -1, -1):
+                # ノードの作成
                 q = Node(vector, lc)
+                self.nodes.add(q)
                 if lc == l_max:
                     self.entry_point = q
-                self.nodes.add(q)
             self.highest_layer_num = l_max
             return
 
-        # 初回以降のノード登録
+        # 2つ目以降のノード登録
         ep = self.entry_point
         candidates = {}
 
+        # 最上位レイヤーから出発し、ノードを登録するレイヤーの開始点まで移動
         for lc in range(self.highest_layer_num, l_max, -1):
             q = Node(vector, lc)
             candidates = self._search_layer(q, ep, 1)
             ep = max(candidates, key=lambda x: self._calc_similarity(q, x))
 
+        # 各レイヤーにクエリのノードを登録し、近傍とのエッジを作成する
         for lc in range(min(self.highest_layer_num, l_max), -1, -1):
-            # ノードの登録
+            # ノードの作成
             q = Node(vector, lc)
             self.nodes.add(q)
 
-            # レイヤー内でのエッジを張るノードを選択
+            # レイヤー内でのエッジを張る近傍ノードを決定
             candidates = self._search_layer(q, ep, self.ef_construction)
             neighbors = self._select_neighbors(q, candidates, self.m_conn)
 
-            # エッジを登録
+            # エッジの作成
             for e in neighbors:
                 # クエリと近傍に双方向のエッジを作成
                 q.add_neighborhood(e)
                 e.add_neighborhood(q)
 
-                # エッジ数が上限を超える場合はエッジを絞る
+                # ノードあたりのエッジ数が上限を超えないようにする
                 if len(e.neighborhood) > self.m_conn_max:
                     e.neighborhood = self._select_neighbors(
                         e, e.neighborhood, self.m_conn_max
