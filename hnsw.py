@@ -1,5 +1,5 @@
 import math
-from typing import Set, List
+from typing import Set
 
 import numpy as np
 
@@ -127,7 +127,7 @@ class HNSW:
 
         return neighbors
 
-    def knn_search(self, vector: np.ndarray, k: int, ef: int) -> List[Node]:
+    def knn_search(self, vector: np.ndarray, k: int, ef: int) -> Set[Node]:
         """
         指定されたベクトルに最も類似するノードをk個探索するK近傍探索を行う
 
