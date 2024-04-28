@@ -100,6 +100,7 @@ class HNSW:
         candidates = set([ep])
         neighbors = set([ep])
 
+        # すべての候補の探索が終了するまで近傍ノードを探す
         while candidates:
             c = max(candidates, key=lambda x: self._calc_similarity(q, x))
             f = min(neighbors, key=lambda x: self._calc_similarity(q, x))
@@ -117,6 +118,7 @@ class HNSW:
                     ):
                         candidates.add(e)
                         neighbors.add(e)
+                        # 近傍のノード数の上限を超えた場合は、類似度の低いものをホップする
                         if len(neighbors) > ef:
                             f = min(
                                 neighbors, key=lambda x: self._calc_similarity(q, x)
@@ -142,10 +144,12 @@ class HNSW:
         q = Node(vector, 0)
         ep = self.entry_point
 
+        # 最上位のレイヤーから探索を開始し、最下層のレイヤーの探索開始点を決定する
         for _ in range(self.highest_layer_num, 0, -1):
             candidates = self._search_layer(q, ep, 1)
             ep = max(candidates, key=lambda x: self._calc_similarity(q, x))
 
+        # 最下層のレイヤーで探索を行い、TopKを返す
         candidates = self._search_layer(q, ep, ef)
         return self._select_neighbors(q, candidates, k)
 
