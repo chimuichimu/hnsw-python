@@ -33,23 +33,23 @@ class Node:
 class HNSW:
     """Hierarchical Navigable Small World (HNSW) のグラフ構造を管理するクラス"""
 
-    def __init__(self, m_conn: int, m_conn_max: int, ef_construction: int, ml: float):
+    def __init__(self, M: int, M_max: int, ef_construction: int, mL: float):
         """
         グラフ構造の初期化
 
         Args:
-            m_conn (int): 各ノードが新しく追加される際に接続される近傍ノードの数
-            m_conn_max (int): 一つのレイヤーにおけるノードが持つことができるエッジの最大数
+            M (int): 各ノードが新しく追加される際に接続される近傍ノードの数
+            M_max (int): 一つのレイヤーにおけるノードが持つことができるエッジの最大数
             ef_construction (int): 構築中時に探索する近傍ノードの数
-            ml (float): ノードが属するレイヤーを決定する時の正規化パラメータ
+            mL (float): ノードが属するレイヤーを決定する時の正規化パラメータ
         """
         self.nodes: Set[Node] = set()
         self.highest_layer_num: int = 0
         self.entry_point: Node = None
-        self.m_conn = m_conn
-        self.m_conn_max = m_conn_max
+        self.M = M
+        self.M_max = M_max
         self.ef_construction = ef_construction
-        self.ml = ml
+        self.mL = mL
 
     def _calc_similarity(self, a: Node, b: Node) -> float:
         """
@@ -157,7 +157,7 @@ class HNSW:
             vector (np.ndarray): 新たに追加するクエリのもとになるベクトル
         """
         # クエリのノードを追加する最も高位のレイヤーを確率的に決定
-        l_max = math.floor(-math.log(np.random.uniform()) * self.ml)
+        l_max = math.floor(-math.log(np.random.uniform()) * self.mL)
 
         # 1つ目のノード登録
         if self.entry_point is None:
@@ -188,7 +188,7 @@ class HNSW:
 
             # レイヤー内でのエッジを張る近傍ノードを決定
             candidates = self._search_layer(q, ep, self.ef_construction)
-            neighbors = self._select_neighbors(q, candidates, self.m_conn)
+            neighbors = self._select_neighbors(q, candidates, self.M)
 
             # エッジの作成
             for e in neighbors:
@@ -197,9 +197,9 @@ class HNSW:
                 e.add_neighborhood(q)
 
                 # ノードあたりのエッジ数が上限を超えないようにする
-                if len(e.neighborhood) > self.m_conn_max:
+                if len(e.neighborhood) > self.M_max:
                     e.neighborhood = self._select_neighbors(
-                        e, e.neighborhood, self.m_conn_max
+                        e, e.neighborhood, self.M_max
                     )
 
         if l_max > self.highest_layer_num:
